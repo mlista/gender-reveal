@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Las letras hablan — Revelación</title>
+<style>
+  :root{
+    --bg:#0f0f12;
+    --card:#0f1720;
+    --pink:#ff66a3;
+    --blue:#4fc3ff;
+    --glass: rgba(255,255,255,0.04);
+    --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  }
+  html,body{height:100%;margin:0;background:linear-gradient(180deg,#050607 0%, #0d1114 100%);font-family:var(--font-sans);color:#eee}
+  .wrap{height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box}
+  .card{width:100%;max-width:820px;border-radius:14px;background:linear-gradient(180deg,rgba(255,255,255,0.02), rgba(255,255,255,0.01));box-shadow:0 10px 30px rgba(2,6,23,0.7);padding:28px;position:relative;overflow:hidden}
+  h1{margin:0 0 12px 0;font-size:20px;letter-spacing:0.6px}
+  p.lead{margin:0 0 22px 0;opacity:0.85}
+  .letter-row{display:flex;gap:12px;justify-content:center;margin-bottom:18px}
+  .pill{background:var(--glass);padding:10px 16px;border-radius:999px;border:1px solid rgba(255,255,255,0.03);font-weight:600;cursor:pointer;user-select:none}
+  .center{display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center;padding:12px}
+  .word{font-size:34px;font-weight:700;letter-spacing:0.6px;margin:8px 0}
+  .sub{font-size:14px;color:rgba(255,255,255,0.75);margin-bottom:12px}
+  .progress{height:8px;background:rgba(255,255,255,0.06);border-radius:999px;overflow:hidden;margin-top:12px}
+  .bar{height:100%;width:0%;background:linear-gradient(90deg,var(--pink),var(--blue));transition:width 0.3s linear}
+  .footer{display:flex;justify-content:space-between;align-items:center;margin-top:14px;font-size:13px;opacity:0.9}
+  button.small{background:transparent;border:1px solid rgba(255,255,255,0.06);color:inherit;padding:8px 12px;border-radius:8px;cursor:pointer}
+  /* big reveal screens */
+  .reveal{
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;
+    color:#111;font-weight:800;font-size:46px;backdrop-filter:blur(2px)
+  }
+  .reveal .wordbig{font-size:54px}
+  .pink-bg{background:linear-gradient(135deg, rgba(255,102,163,1), rgba(255,153,190,1));color:#fff}
+  .blue-bg{background:linear-gradient(135deg, rgba(79,195,255,1), rgba(102,181,255,1));color:#012; }
+  .hidden{display:none}
+  /* confetti canvas */
+  canvas#confetti{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}
+  /* fade to black */
+  .blackout{position:absolute;inset:0;background:#000;opacity:0;transition:opacity 700ms ease-in;pointer-events:none}
+  /* small helpers */
+  .muted{opacity:0.7;font-size:13px}
+  @media (max-width:520px){
+    .card{padding:18px;border-radius:10px}
+    .word{font-size:28px}
+    .reveal{font-size:26px}
+    .reveal .wordbig{font-size:36px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card" role="main" aria-live="polite">
+    <div id="mainUI">
+      <div class="center">
+        <h1>Las letras hablan</h1>
+        <p class="lead">Palabras que empujan el instinto. Dejá que la letra te susurre y no mires el final... (si podés)</p>
+        <div class="letter-row">
+          <div class="pill">H</div>
+          <div class="pill">M</div>
+          <div class="pill">N</div>
+        </div>
+        <div style="max-width:620px">
+          <div class="sub">Empezá: las palabras irán apareciendo solas. Si sos impaciente, tocá la pantalla para acelerar.</div>
+          <button id="startBtn" class="small">Comenzar el misterio</button>
+        </div>
+        <div class="progress" style="width:100%;max-width:640px;">
+          <div class="bar" id="progBar"></div>
+        </div>
+        <div class="footer">
+          <div class="muted">20 palabras — paciencia (o no)</div>
+          <div><button id="shareBtn" class="small">Instrucciones para compartir</button></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- word display -->
+    <div id="wordScreen" class="center hidden" aria-hidden="true">
+      <div class="sub">Tocá la pantalla para saltar (si te animás)</div>
+      <div class="word" id="currentWord">Misterio</div>
+    </div>
+
+    <!-- reveal feminine first -->
+    <div id="revealF" class="reveal pink-bg hidden" aria-hidden="true">
+      <div style="font-size:18px;opacity:0.95;margin-bottom:8px">Tus palabras se inclinan...</div>
+      <div class="wordbig">¡ES UNA NENA!</div>
+      <div style="margin-top:8px;font-weight:600;opacity:0.95">Así lo susurraron las letras.</div>
+    </div>
+
+    <!-- blackout -->
+    <div id="blackout" class="blackout"></div>
+
+    <!-- reveal masculine -->
+    <div id="revealM" class="reveal blue-bg hidden" aria-hidden="true">
+      <div style="font-size:18px;opacity:0.95;margin-bottom:8px">No todo es lo que parece...</div>
+      <div class="wordbig">¡ES UN NENE!</div>
+      <div style="margin-top:8px;font-weight:600;opacity:0.95">Hoy la sorpresa tenía humor.</div>
+    </div>
+
+    <canvas id="confetti"></canvas>
+  </div>
+</div>
+
+<script>
+/* ---- Config ---- */
+const WORDS = [
+  "Susurro", "Misterio", "Latido", "Secreto", "Cuna", "Promesa", "Aurora", "Nombre",
+  "Caricia", "Vínculo", "Esperanza", "Mirada", "Milagro", "Memoria", "Risa", "Silencio",
+  "Plegaria", "Canto", "Abrazo", "Destino"
+];
+const COUNT = WORDS.length;      // 20
+const SECS_PER_WORD = 6;        // 6s each => ~120s total
+const SHOW_FEM_SECONDS = 5.2;   // tiempo que se ve "NENA"
+const BLACKOUT_MS = 900;        // blackout fade time
+const AFTER_BLACKOUT_DELAY = 400; // pequeño delay antes del final reveal
+
+/* ---- State ---- */
+let idx = 0;
+let timer = null;
+let running = false;
+let accelerated = false;
+
+/* ---- Elements ---- */
+const startBtn = document.getElementById('startBtn');
+const shareBtn = document.getElementById('shareBtn');
+const mainUI = document.getElementById('mainUI');
+const wordScreen = document.getElementById('wordScreen');
+const currentWord = document.getElementById('currentWord');
+const progBar = document.getElementById('progBar');
+const revealF = document.getElementById('revealF');
+const revealM = document.getElementById('revealM');
+const blackout = document.getElementById('blackout');
+const confettiCanvas = document.getElementById('confetti');
+const card = document.querySelector('.card');
+
+/* ---- Basic UX ---- */
+startBtn.addEventListener('click', startGame);
+shareBtn.addEventListener('click', ()=>{
+  alert("Subí este archivo a Netlify o GitHub Pages y compartí el enlace por WhatsApp. Si querés te puedo dar pasos rápidos.");
+});
+
+/* allow tap to accelerate */
+document.addEventListener('click', ()=>{ if(running){ accelerate(); } });
+
+function startGame(){
+  if(running) return;
+  running = true;
+  mainUI.classList.add('hidden');
+  wordScreen.classList.remove('hidden');
+  idx = 0;
+  progBar.style.width = '0%';
+  showWord();
+  scheduleNext();
+}
+
+/* show current word */
+function showWord(){
+  currentWord.textContent = WORDS[idx] || "";
+  updateProgress();
+  animatePulse(currentWord);
+}
+
+/* schedule next auto-advance */
+function scheduleNext(){
+  clearTimeout(timer);
+  const base = SECS_PER_WORD * 1000;
+  const effective = accelerated ? Math.max(700, base / 4) : base;
+  timer = setTimeout(()=>{
+    idx++;
+    if(idx < COUNT){
+      showWord();
+      scheduleNext();
+    } else {
+      // finish words -> reflection -> reveal female
+      finishWords();
+    }
+  }, effective);
+}
+
+/* accelerate (tap) */
+function accelerate(){
+  if(accelerated) return;
+  accelerated = true;
+  card.style.transition = "transform 300ms ease";
+  card.style.transform = "scale(0.995)";
+  // speed up the rest
+  clearTimeout(timer);
+  scheduleNext();
+}
+
+/* progress bar */
+function updateProgress(){
+  const pct = Math.round(((idx) / COUNT) * 100);
+  progBar.style.width = pct + "%";
+}
+
+/* finish sequence */
+function finishWords(){
+  // hide word screen, show feminine reveal
+  wordScreen.classList.add('hidden');
+  progBar.style.width = "100%";
+  // quick poetic reflection
+  showReflection().then(()=> showFemaleReveal());
+}
+
+function showReflection(){
+  return new Promise(res=>{
+    const el = document.createElement('div');
+    el.className = 'center';
+    el.style.padding = "10px";
+    el.innerHTML = `<div class="sub">Tus elecciones dejaron un rastro...</div><div style="font-size:18px;font-weight:600">Escuchá ese rastro.</div>`;
+    card.appendChild(el);
+    setTimeout(()=>{ el.remove(); res(); }, 2800);
+  });
+}
+
+/* reveal female then switch to male */
+function showFemaleReveal(){
+  revealF.classList.remove('hidden');
+  startConfetti('pink');
+  // let it be visible for a few seconds, then blackout and reveal male
+  setTimeout(()=>{
+    stopConfetti();
+    // fade to black
+    blackout.style.opacity = '1';
+    setTimeout(()=>{
+      revealF.classList.add('hidden');
+      blackout.style.opacity = '1';
+      // small pause, then show male
+      setTimeout(()=>{
+        // quick flash then show male
+        blackout.style.opacity = '0';
+        revealM.classList.remove('hidden');
+        startConfetti('blue');
+        // final confetti and done
+      }, AFTER_BLACKOUT_DELAY + 100);
+    }, BLACKOUT_MS);
+  }, SHOW_FEM_SECONDS * 1000);
+}
+
+/* confetti (simple canvas) */
+let confettiTimer=null;
+function startConfetti(theme){
+  const ctx = confettiCanvas.getContext('2d');
+  const W = confettiCanvas.width = confettiCanvas.clientWidth;
+  const H = confettiCanvas.height = confettiCanvas.clientHeight;
+  const pieces = [];
+  const colors = theme==='pink' ? ['#fff', '#ffd6e8', '#ff7ab1', '#ffb6d5'] : ['#fff','#ccefff','#66d6ff','#99e6ff'];
+  for(let i=0;i<120;i++){
+    pieces.push({
+      x: Math.random()*W,
+      y: Math.random()* -H,
+      r: Math.random()*8+4,
+      d: Math.random()*6+2,
+      color: colors[Math.floor(Math.random()*colors.length)],
+      tilt: Math.random()*10
+    });
+  }
+  let t=0;
+  function render(){
+    ctx.clearRect(0,0,W,H);
+    for(let p of pieces){
+      p.y += Math.cos(t + p.d) + 1 + p.r/6;
+      p.x += Math.sin(t);
+      p.tilt += 0.05;
+      ctx.beginPath();
+      ctx.fillStyle = p.color;
+      ctx.ellipse(p.x, p.y, p.r, p.r*0.6, p.tilt, 0, Math.PI*2);
+      ctx.fill();
+      if(p.y > H + 30){ p.y = -10; p.x = Math.random()*W; }
+    }
+    t += 0.02;
+    confettiTimer = requestAnimationFrame(render);
+  }
+  cancelConfetti();
+  confettiTimer = requestAnimationFrame(render);
+}
+function stopConfetti(){ cancelConfetti(); }
+function cancelConfetti(){ if(confettiTimer) cancelAnimationFrame(confettiTimer); confettiTimer = null; const ctx = confettiCanvas.getContext('2d'); ctx && ctx.clearRect(0,0,confettiCanvas.width,confettiCanvas.height); }
+
+/* small pulse animation */
+function animatePulse(el){
+  el.animate([{transform:'scale(1)'},{transform:'scale(1.04)'},{transform:'scale(1)'}],{duration:900,iterations:1,easing:'ease-in-out'});
+}
+
+/* Accessibility: allow keyboard start */
+document.addEventListener('keydown', (e)=>{ if(e.key === 'Enter') startGame(); });
+
+/* Prevent accidental text selection during taps */
+document.addEventListener('touchstart', function(){}, {passive:true});
+</script>
+</body>
+</html>
