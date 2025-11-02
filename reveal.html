@@ -1,295 +1,432 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Las letras hablan — Revelación</title>
-<style>
-  :root{
-    --bg:#0f0f12;
-    --card:#0f1720;
-    --pink:#ff66a3;
-    --blue:#4fc3ff;
-    --glass: rgba(255,255,255,0.04);
-    --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
-  }
-  html,body{height:100%;margin:0;background:linear-gradient(180deg,#050607 0%, #0d1114 100%);font-family:var(--font-sans);color:#eee}
-  .wrap{height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box}
-  .card{width:100%;max-width:820px;border-radius:14px;background:linear-gradient(180deg,rgba(255,255,255,0.02), rgba(255,255,255,0.01));box-shadow:0 10px 30px rgba(2,6,23,0.7);padding:28px;position:relative;overflow:hidden}
-  h1{margin:0 0 12px 0;font-size:20px;letter-spacing:0.6px}
-  p.lead{margin:0 0 22px 0;opacity:0.85}
-  .letter-row{display:flex;gap:12px;justify-content:center;margin-bottom:18px}
-  .pill{background:var(--glass);padding:10px 16px;border-radius:999px;border:1px solid rgba(255,255,255,0.03);font-weight:600;cursor:pointer;user-select:none}
-  .center{display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center;padding:12px}
-  .word{font-size:34px;font-weight:700;letter-spacing:0.6px;margin:8px 0}
-  .sub{font-size:14px;color:rgba(255,255,255,0.75);margin-bottom:12px}
-  .progress{height:8px;background:rgba(255,255,255,0.06);border-radius:999px;overflow:hidden;margin-top:12px}
-  .bar{height:100%;width:0%;background:linear-gradient(90deg,var(--pink),var(--blue));transition:width 0.3s linear}
-  .footer{display:flex;justify-content:space-between;align-items:center;margin-top:14px;font-size:13px;opacity:0.9}
-  button.small{background:transparent;border:1px solid rgba(255,255,255,0.06);color:inherit;padding:8px 12px;border-radius:8px;cursor:pointer}
-  /* big reveal screens */
-  .reveal{
-    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;
-    color:#111;font-weight:800;font-size:46px;backdrop-filter:blur(2px)
-  }
-  .reveal .wordbig{font-size:54px}
-  .pink-bg{background:linear-gradient(135deg, rgba(255,102,163,1), rgba(255,153,190,1));color:#fff}
-  .blue-bg{background:linear-gradient(135deg, rgba(79,195,255,1), rgba(102,181,255,1));color:#012; }
-  .hidden{display:none}
-  /* confetti canvas */
-  canvas#confetti{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}
-  /* fade to black */
-  .blackout{position:absolute;inset:0;background:#000;opacity:0;transition:opacity 700ms ease-in;pointer-events:none}
-  /* small helpers */
-  .muted{opacity:0.7;font-size:13px}
-  @media (max-width:520px){
-    .card{padding:18px;border-radius:10px}
-    .word{font-size:28px}
-    .reveal{font-size:26px}
-    .reveal .wordbig{font-size:36px}
-  }
-</style>
+    <meta charset="UTF-8">
+    <title>Baby Bomber</title>
+    <style>
+        body {
+            background-color: #1a1a1a;
+            color: #f0f0f0;
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+        canvas {
+            background-color: #4a5d23; /* Verde oscuro tipo bomberman */
+            border: 4px solid #333;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+        h1, #status {
+            text-align: center;
+            color: #fff;
+        }
+    </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="card" role="main" aria-live="polite">
-    <div id="mainUI">
-      <div class="center">
-        <h1>Las letras hablan</h1>
-        <p class="lead">Palabras que empujan el instinto. Dejá que la letra te susurre y no mires el final... (si podés)</p>
-        <div class="letter-row">
-          <div class="pill">H</div>
-          <div class="pill">M</div>
-          <div class="pill">N</div>
-        </div>
-        <div style="max-width:620px">
-          <div class="sub">Empezá: las palabras irán apareciendo solas. Si sos impaciente, tocá la pantalla para acelerar.</div>
-          <button id="startBtn" class="small">Comenzar el misterio</button>
-        </div>
-        <div class="progress" style="width:100%;max-width:640px;">
-          <div class="bar" id="progBar"></div>
-        </div>
-        <div class="footer">
-          <div class="muted">20 palabras — paciencia (o no)</div>
-          <div><button id="shareBtn" class="small">Instrucciones para compartir</button></div>
-        </div>
-      </div>
-    </div>
+    <h1>Baby Bomber</h1>
+    <canvas id="gameCanvas"></canvas>
+    <h2 id="status">🎯 Objetivo: ¡Encuentra la pista escondida!</h2>
+    <p>Usa WASD o Flechas para moverte. Presiona [Espacio] para poner una bomba.</p>
 
-    <!-- word display -->
-    <div id="wordScreen" class="center hidden" aria-hidden="true">
-      <div class="sub">Tocá la pantalla para saltar (si te animás)</div>
-      <div class="word" id="currentWord">Misterio</div>
-    </div>
+    <script>
+        // --- 1. CONFIGURACIÓN DEL JUEGO ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const statusEl = document.getElementById('status');
 
-    <!-- reveal feminine first -->
-    <div id="revealF" class="reveal pink-bg hidden" aria-hidden="true">
-      <div style="font-size:18px;opacity:0.95;margin-bottom:8px">Tus palabras se inclinan...</div>
-      <div class="wordbig">¡ES UNA NENA!</div>
-      <div style="margin-top:8px;font-weight:600;opacity:0.95">Así lo susurraron las letras.</div>
-    </div>
+        const TILE_SIZE = 40; // Tamaño de cada celda (píxeles)
+        const ROWS = 13;      // 13 filas
+        const COLS = 17;      // 17 columnas
 
-    <!-- blackout -->
-    <div id="blackout" class="blackout"></div>
+        canvas.width = COLS * TILE_SIZE;
+        canvas.height = ROWS * TILE_SIZE;
 
-    <!-- reveal masculine -->
-    <div id="revealM" class="reveal blue-bg hidden" aria-hidden="true">
-      <div style="font-size:18px;opacity:0.95;margin-bottom:8px">No todo es lo que parece...</div>
-      <div class="wordbig">¡ES UN NENE!</div>
-      <div style="margin-top:8px;font-weight:600;opacity:0.95">Hoy la sorpresa tenía humor.</div>
-    </div>
+        // Definición del mapa
+        const MAP_KEY = {
+            EMPTY: 0,
+            SOLID: 1,
+            DESTRUCTIBLE: 2,
+            CLUE_HIDDEN: 3,
+            CLUE_REVEALED: 4 // The object on the ground
+        };
 
-    <canvas id="confetti"></canvas>
-  </div>
-</div>
+        let map = [];
+        let bombs = [];
+        let explosions = [];
+        let clueRevealed = null;
+        let gameWon = false;
+        let gameOver = false;
 
-<script>
-/* ---- Config ---- */
-const WORDS = [
-  "Susurro", "Misterio", "Latido", "Secreto", "Cuna", "Promesa", "Aurora", "Nombre",
-  "Caricia", "Vínculo", "Esperanza", "Mirada", "Milagro", "Memoria", "Risa", "Silencio",
-  "Plegaria", "Canto", "Abrazo", "Destino"
-];
-const COUNT = WORDS.length;      // 20
-const SECS_PER_WORD = 6;        // 6s each => ~120s total
-const SHOW_FEM_SECONDS = 5.2;   // tiempo que se ve "NENA"
-const BLACKOUT_MS = 900;        // blackout fade time
-const AFTER_BLACKOUT_DELAY = 400; // pequeño delay antes del final reveal
+        // --- 2. EL JUGADOR (BEBÉ) ---
+        let player = {
+            x: TILE_SIZE * 1.5,
+            y: TILE_SIZE * 1.5,
+            initialX: TILE_SIZE * 1.5,
+            initialY: TILE_SIZE * 1.5,
+            size: TILE_SIZE * 0.6,
+            speed: 2,
+            color: '#FFDAB9',
+            lives: 3,
+            invincible: false,
+            invincibleTimer: 0
+        };
 
-/* ---- State ---- */
-let idx = 0;
-let timer = null;
-let running = false;
-let accelerated = false;
+        // --- 3. GENERACIÓN DEL MAPA ---
+        function generateMap() {
+            let destructibleBlocks = [];
+            for (let r = 0; r < ROWS; r++) {
+                map[r] = [];
+                for (let c = 0; c < COLS; c++) {
+                    if (r === 0 || r === ROWS - 1 || c === 0 || c === COLS - 1 || (r % 2 === 0 && c % 2 === 0)) {
+                        map[r][c] = MAP_KEY.SOLID; // Paredes sólidas
+                    } else {
+                        // Evitar poner bloques donde empieza el jugador
+                        if ((r === 1 && c === 1) || (r === 1 && c === 2) || (r === 2 && c === 1)) {
+                             map[r][c] = MAP_KEY.EMPTY;
+                        }
+                        // Llenar el resto con bloques destruibles
+                        else if (Math.random() > 0.1) { // 90% de probabilidad de bloque
+                            map[r][c] = MAP_KEY.DESTRUCTIBLE;
+                            destructibleBlocks.push({r, c});
+                        } else {
+                            map[r][c] = MAP_KEY.EMPTY;
+                        }
+                    }
+                }
+            }
+            
+            // Esconder la pista en un bloque al azar
+            if (destructibleBlocks.length > 0) {
+                let cluePos = destructibleBlocks[Math.floor(Math.random() * destructibleBlocks.length)];
+                map[cluePos.r][cluePos.c] = MAP_KEY.CLUE_HIDDEN;
+            }
+        }
 
-/* ---- Elements ---- */
-const startBtn = document.getElementById('startBtn');
-const shareBtn = document.getElementById('shareBtn');
-const mainUI = document.getElementById('mainUI');
-const wordScreen = document.getElementById('wordScreen');
-const currentWord = document.getElementById('currentWord');
-const progBar = document.getElementById('progBar');
-const revealF = document.getElementById('revealF');
-const revealM = document.getElementById('revealM');
-const blackout = document.getElementById('blackout');
-const confettiCanvas = document.getElementById('confetti');
-const card = document.querySelector('.card');
+        // --- 4. CONTROLES ---
+        let keys = {};
+        document.addEventListener('keydown', e => keys[e.code] = true);
+        document.addEventListener('keyup', e => keys[e.code] = false);
 
-/* ---- Basic UX ---- */
-startBtn.addEventListener('click', startGame);
-shareBtn.addEventListener('click', ()=>{
-  alert("Subí este archivo a Netlify o GitHub Pages y compartí el enlace por WhatsApp. Si querés te puedo dar pasos rápidos.");
-});
+        document.addEventListener('keydown', e => {
+            if (e.code === 'Space' && !gameWon && !gameOver) {
+                placeBomb();
+            }
+        });
 
-/* allow tap to accelerate */
-document.addEventListener('click', ()=>{ if(running){ accelerate(); } });
+        // --- 5. LÓGICA DEL JUEGO (UPDATE) ---
+        function update() {
+            if (gameWon || gameOver) return;
+            movePlayer();
+            updateBombs();
+            updateExplosions();
+            updatePlayer();
+            checkCluePickup();
+        }
 
-function startGame(){
-  if(running) return;
-  running = true;
-  mainUI.classList.add('hidden');
-  wordScreen.classList.remove('hidden');
-  idx = 0;
-  progBar.style.width = '0%';
-  showWord();
-  scheduleNext();
-}
+        function checkCluePickup() {
+            if (!clueRevealed) return;
 
-/* show current word */
-function showWord(){
-  currentWord.textContent = WORDS[idx] || "";
-  updateProgress();
-  animatePulse(currentWord);
-}
+            const playerCol = Math.floor(player.x / TILE_SIZE);
+            const playerRow = Math.floor(player.y / TILE_SIZE);
 
-/* schedule next auto-advance */
-function scheduleNext(){
-  clearTimeout(timer);
-  const base = SECS_PER_WORD * 1000;
-  const effective = accelerated ? Math.max(700, base / 4) : base;
-  timer = setTimeout(()=>{
-    idx++;
-    if(idx < COUNT){
-      showWord();
-      scheduleNext();
-    } else {
-      // finish words -> reflection -> reveal female
-      finishWords();
-    }
-  }, effective);
-}
+            if (playerRow === clueRevealed.r && playerCol === clueRevealed.c) {
+                gameWon = true;
+            }
+        }
 
-/* accelerate (tap) */
-function accelerate(){
-  if(accelerated) return;
-  accelerated = true;
-  card.style.transition = "transform 300ms ease";
-  card.style.transform = "scale(0.995)";
-  // speed up the rest
-  clearTimeout(timer);
-  scheduleNext();
-}
+        function updatePlayer() {
+            if (player.invincible) {
+                player.invincibleTimer--;
+                if (player.invincibleTimer <= 0) {
+                    player.invincible = false;
+                    player.color = '#FFDAB9'; // Restore original color
+                } else {
+                    // Blink effect
+                    player.color = (player.invincibleTimer % 20 < 10) ? 'white' : '#FFDAB9';
+                }
+            }
+        }
 
-/* progress bar */
-function updateProgress(){
-  const pct = Math.round(((idx) / COUNT) * 100);
-  progBar.style.width = pct + "%";
-}
+        function movePlayer() {
+            let dx = 0;
+            let dy = 0;
 
-/* finish sequence */
-function finishWords(){
-  // hide word screen, show feminine reveal
-  wordScreen.classList.add('hidden');
-  progBar.style.width = "100%";
-  // quick poetic reflection
-  showReflection().then(()=> showFemaleReveal());
-}
+            if (keys['KeyW'] || keys['ArrowUp']) dy = -player.speed;
+            if (keys['KeyS'] || keys['ArrowDown']) dy = player.speed;
+            if (keys['KeyA'] || keys['ArrowLeft']) dx = -player.speed;
+            if (keys['KeyD'] || keys['ArrowRight']) dx = player.speed;
 
-function showReflection(){
-  return new Promise(res=>{
-    const el = document.createElement('div');
-    el.className = 'center';
-    el.style.padding = "10px";
-    el.innerHTML = `<div class="sub">Tus elecciones dejaron un rastro...</div><div style="font-size:18px;font-weight:600">Escuchá ese rastro.</div>`;
-    card.appendChild(el);
-    setTimeout(()=>{ el.remove(); res(); }, 2800);
-  });
-}
+            // Detección de colisiones simple
+            // Revisa la próxima posición X
+            if (dx !== 0 && !isSolid(player.x + dx, player.y)) {
+                player.x += dx;
+            }
+            // Revisa la próxima posición Y
+            if (dy !== 0 && !isSolid(player.x, player.y + dy)) {
+                player.y += dy;
+            }
+        }
+        
+        function getTileAt(x, y) {
+            const r = Math.floor(y / TILE_SIZE);
+            const c = Math.floor(x / TILE_SIZE);
+            if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return MAP_KEY.SOLID;
+            return map[r][c];
+        }
 
-/* reveal female then switch to male */
-function showFemaleReveal(){
-  revealF.classList.remove('hidden');
-  startConfetti('pink');
-  // let it be visible for a few seconds, then blackout and reveal male
-  setTimeout(()=>{
-    stopConfetti();
-    // fade to black
-    blackout.style.opacity = '1';
-    setTimeout(()=>{
-      revealF.classList.add('hidden');
-      blackout.style.opacity = '1';
-      // small pause, then show male
-      setTimeout(()=>{
-        // quick flash then show male
-        blackout.style.opacity = '0';
-        revealM.classList.remove('hidden');
-        startConfetti('blue');
-        // final confetti and done
-      }, AFTER_BLACKOUT_DELAY + 100);
-    }, BLACKOUT_MS);
-  }, SHOW_FEM_SECONDS * 1000);
-}
+        function isSolid(x, y) {
+            // Revisa las 4 esquinas del "bebé"
+            const radius = player.size / 2;
+            const tile1 = getTileAt(x - radius, y - radius); // Arriba-Izquierda
+            const tile2 = getTileAt(x + radius, y - radius); // Arriba-Derecha
+            const tile3 = getTileAt(x - radius, y + radius); // Abajo-Izquierda
+            const tile4 = getTileAt(x + radius, y + radius); // Abajo-Derecha
+            
+            const solidTypes = [MAP_KEY.SOLID, MAP_KEY.DESTRUCTIBLE, MAP_KEY.CLUE_HIDDEN];
+            
+            return solidTypes.includes(tile1) || solidTypes.includes(tile2) || solidTypes.includes(tile3) || solidTypes.includes(tile4);
+        }
 
-/* confetti (simple canvas) */
-let confettiTimer=null;
-function startConfetti(theme){
-  const ctx = confettiCanvas.getContext('2d');
-  const W = confettiCanvas.width = confettiCanvas.clientWidth;
-  const H = confettiCanvas.height = confettiCanvas.clientHeight;
-  const pieces = [];
-  const colors = theme==='pink' ? ['#fff', '#ffd6e8', '#ff7ab1', '#ffb6d5'] : ['#fff','#ccefff','#66d6ff','#99e6ff'];
-  for(let i=0;i<120;i++){
-    pieces.push({
-      x: Math.random()*W,
-      y: Math.random()* -H,
-      r: Math.random()*8+4,
-      d: Math.random()*6+2,
-      color: colors[Math.floor(Math.random()*colors.length)],
-      tilt: Math.random()*10
-    });
-  }
-  let t=0;
-  function render(){
-    ctx.clearRect(0,0,W,H);
-    for(let p of pieces){
-      p.y += Math.cos(t + p.d) + 1 + p.r/6;
-      p.x += Math.sin(t);
-      p.tilt += 0.05;
-      ctx.beginPath();
-      ctx.fillStyle = p.color;
-      ctx.ellipse(p.x, p.y, p.r, p.r*0.6, p.tilt, 0, Math.PI*2);
-      ctx.fill();
-      if(p.y > H + 30){ p.y = -10; p.x = Math.random()*W; }
-    }
-    t += 0.02;
-    confettiTimer = requestAnimationFrame(render);
-  }
-  cancelConfetti();
-  confettiTimer = requestAnimationFrame(render);
-}
-function stopConfetti(){ cancelConfetti(); }
-function cancelConfetti(){ if(confettiTimer) cancelAnimationFrame(confettiTimer); confettiTimer = null; const ctx = confettiCanvas.getContext('2d'); ctx && ctx.clearRect(0,0,confettiCanvas.width,confettiCanvas.height); }
+        function placeBomb() {
+            // Centrar la bomba en la celda actual
+            const r = Math.floor(player.y / TILE_SIZE);
+            const c = Math.floor(player.x / TILE_SIZE);
 
-/* small pulse animation */
-function animatePulse(el){
-  el.animate([{transform:'scale(1)'},{transform:'scale(1.04)'},{transform:'scale(1)'}],{duration:900,iterations:1,easing:'ease-in-out'});
-}
+            // Evitar poner dos bombas en la misma celda
+            if (bombs.some(b => b.r === r && b.c === c)) return;
 
-/* Accessibility: allow keyboard start */
-document.addEventListener('keydown', (e)=>{ if(e.key === 'Enter') startGame(); });
+            bombs.push({
+                r: r,
+                c: c,
+                timer: 180, // 180 frames (aprox 3 segundos)
+                range: 2     // Rango de la explosión
+            });
+        }
 
-/* Prevent accidental text selection during taps */
-document.addEventListener('touchstart', function(){}, {passive:true});
-</script>
+        function updateBombs() {
+            for (let i = bombs.length - 1; i >= 0; i--) {
+                bombs[i].timer--;
+                if (bombs[i].timer <= 0) {
+                    explode(bombs[i]);
+                    bombs.splice(i, 1);
+                }
+            }
+        }
+        
+        function explode(bomb) {
+            const dirs = [[0, 0], [0, 1], [0, -1], [1, 0], [-1, 0]]; // Centro, Abajo, Arriba, Derecha, Izquierda
+            
+            for (const dir of dirs) {
+                for (let i = 0; i <= bomb.range; i++) {
+                    const r = bomb.r + dir[0] * i;
+                    const c = bomb.c + dir[1] * i;
+
+                    if (r < 0 || r >= ROWS || c < 0 || c >= COLS) break;
+
+                    const tile = map[r][c];
+                    
+                    // Añadir efecto de explosión
+                    explosions.push({ r, c, timer: 15 }); // Dura 15 frames
+
+                    if (tile === MAP_KEY.SOLID) {
+                        break; // La explosión se detiene en pared sólida
+                    }
+                    
+                    if (tile === MAP_KEY.DESTRUCTIBLE) {
+                        map[r][c] = MAP_KEY.EMPTY; // Destruye el bloque
+                        break; // La explosión se detiene al romper un bloque
+                    }
+                    
+                    if (tile === MAP_KEY.CLUE_HIDDEN) {
+                        map[r][c] = MAP_KEY.CLUE_REVEALED; // Reveal the object
+                        clueRevealed = { r, c };
+                        statusEl.textContent = "¡Encontraste algo! ¡Ve a recogerlo!";
+                        break; // Stop explosion spreading through it
+                    }
+                }
+            }
+        }
+        
+        function updateExplosions() {
+            for (let i = explosions.length - 1; i >= 0; i--) {
+                const exp = explosions[i];
+                exp.timer--;
+
+                // Comprobar colisión con el jugador
+                const playerCol = Math.floor(player.x / TILE_SIZE);
+                const playerRow = Math.floor(player.y / TILE_SIZE);
+                if (exp.r === playerRow && exp.c === playerCol && !player.invincible) {
+                    playerHit();
+                }
+
+                if (exp.timer <= 0) {
+                    explosions.splice(i, 1);
+                }
+            }
+        }
+
+        function playerHit() {
+            if (player.invincible) return;
+
+            player.lives--;
+            if (player.lives <= 0) {
+                gameOver = true;
+                statusEl.textContent = "GAME OVER. Presiona ESPACIO para reiniciar.";
+                document.addEventListener('keydown', restartGameOnSpace, { once: true });
+            } else {
+                // Respawn y dar invencibilidad temporal
+                player.x = player.initialX;
+                player.y = player.initialY;
+                player.invincible = true;
+                player.invincibleTimer = 120; // 2 segundos de invencibilidad
+            }
+        }
+
+        function restartGameOnSpace(e) {
+            if (e.code === 'Space') {
+                restartGame();
+            } else {
+                // Si se presiona otra tecla, volver a escuchar
+                document.addEventListener('keydown', restartGameOnSpace, { once: true });
+            }
+        }
+
+        function restartGame() {
+            player.lives = 3;
+            player.x = player.initialX;
+            player.y = player.initialY;
+            player.invincible = false;
+            player.invincibleTimer = 0;
+            
+            bombs = [];
+            explosions = [];
+            clueRevealed = null;
+            gameWon = false;
+            gameOver = false;
+            
+            statusEl.textContent = "🎯 Objetivo: ¡Encuentra la pista escondida!";
+            generateMap();
+        }
+
+        // --- 6. RENDERIZADO (DRAW) ---
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (gameWon) {
+                drawWinScreen();
+            } else {
+                drawMap();
+                drawBombs();
+                drawExplosions();
+                drawPlayer();
+                drawUI();
+            }
+        }
+
+        function drawWinScreen() {
+            // A big light blue square
+            ctx.fillStyle = 'lightblue';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Text
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 60px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText("¡ES UN NIÑO!", canvas.width / 2, canvas.height / 2);
+            
+            statusEl.textContent = "🎉 ¡FELICIDADES! 🎉";
+        }
+
+        function drawUI() {
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 24px Arial';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.fillText(`Vidas: ${player.lives}`, 10, 10);
+        }
+
+        function drawMap() {
+            for (let r = 0; r < ROWS; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    const x = c * TILE_SIZE;
+                    const y = r * TILE_SIZE;
+                    
+                    switch(map[r][c]) {
+                        case MAP_KEY.SOLID:
+                            ctx.fillStyle = '#555'; // Gris oscuro
+                            ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+                            break;
+                        case MAP_KEY.DESTRUCTIBLE:
+                        case MAP_KEY.CLUE_HIDDEN: // Se ve igual que un bloque normal
+                            ctx.fillStyle = '#8B4513'; // Marrón (ladrillo)
+                            ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+                            break;
+                        case MAP_KEY.CLUE_REVEALED:
+                            // Draw a small, intriguing object
+                            ctx.fillStyle = '#FFE81C'; // Yellow
+                            ctx.beginPath();
+                            ctx.arc(x + TILE_SIZE / 2, y + TILE_SIZE / 2, TILE_SIZE / 4, 0, Math.PI * 2);
+                            ctx.fill();
+                            break;
+                        case MAP_KEY.EMPTY:
+                            // Ya está limpio por el fondo del canvas
+                            break;
+                    }
+                }
+            }
+        }
+        
+        function drawPlayer() {
+            ctx.fillStyle = player.color;
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.size / 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function drawBombs() {
+            for (const bomb of bombs) {
+                const x = bomb.c * TILE_SIZE + TILE_SIZE / 2;
+                const y = bomb.r * TILE_SIZE + TILE_SIZE / 2;
+                
+                // Efecto de parpadeo
+                const scale = (bomb.timer % 10 < 5) ? 0.7 : 0.8;
+                
+                ctx.fillStyle = '#222'; // Bomba negra
+                ctx.beginPath();
+                ctx.arc(x, y, (TILE_SIZE / 2) * scale, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.fillStyle = 'white'; // Mecha
+                ctx.fillRect(x - 2, y - (TILE_SIZE / 2) * scale - 5, 4, 5);
+            }
+        }
+        
+        function drawExplosions() {
+            for (const exp of explosions) {
+                const x = exp.c * TILE_SIZE;
+                const y = exp.r * TILE_SIZE;
+                
+                // La opacidad disminuye con el tiempo
+                ctx.fillStyle = `rgba(255, 165, 0, ${exp.timer / 15})`; 
+                ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+            }
+        }
+
+        // --- 7. BUCLE PRINCIPAL DEL JUEGO ---
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Iniciar el juego
+        generateMap();
+        gameLoop();
+    </script>
 </body>
 </html>
