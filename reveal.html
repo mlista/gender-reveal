@@ -14,7 +14,50 @@
             justify-content: center;
             height: 100vh;
             margin: 0;
+            position: relative; /* Needed for overlay */
         }
+
+        #gameContainer {
+            position: relative;
+        }
+
+        #controls {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            z-index: 20;
+            display: grid;
+            grid-template-columns: 50px 50px 50px;
+            grid-template-rows: 50px 50px;
+            gap: 10px;
+        }
+
+        #bombButton {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 80px;
+            height: 80px;
+            z-index: 20;
+        }
+
+        .control-btn {
+            background-color: rgba(255, 255, 255, 0.3);
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            color: white;
+            font-size: 24px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            user-select: none; /* Prevent text selection */
+        }
+
+        #btn-up { grid-column: 2; grid-row: 1; }
+        #btn-left { grid-column: 1; grid-row: 2; }
+        #btn-down { grid-column: 2; grid-row: 2; }
+        #btn-right { grid-column: 3; grid-row: 2; }
+
         canvas {
             background-color: #4a5d23; /* Verde oscuro tipo bomberman */
             border: 4px solid #333;
@@ -28,7 +71,16 @@
 </head>
 <body>
     <h1>Baby Bomber</h1>
-    <canvas id="gameCanvas"></canvas>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        <div id="controls">
+            <div id="btn-up" class="control-btn">▲</div>
+            <div id="btn-left" class="control-btn">◀</div>
+            <div id="btn-down" class="control-btn">▼</div>
+            <div id="btn-right" class="control-btn">▶</div>
+        </div>
+        <div id="bombButton" class="control-btn">💣</div>
+    </div>
     <h2 id="status">🎯 Objetivo: ¡Encuentra la pista escondida!</h2>
     <p>Usa WASD o Flechas para moverte. Presiona [Espacio] para poner una bomba.</p>
 
@@ -57,7 +109,9 @@
         let map = [];
         let bombs = [];
         let explosions = [];
-        let clueRevealed = null;
+        let clues = []; // Holds all clue objects {r, c, type, color, revealed}
+        let fakeClueMessage = { timer: 0, color: null };
+        const TOTAL_FAKE_CLUES = 4;
         let gameWon = false;
         let gameOver = false;
 
@@ -77,6 +131,7 @@
 
         // --- 3. GENERACIÓN DEL MAPA ---
         function generateMap() {
+            clues = []; // Reset clues
             let destructibleBlocks = [];
             for (let r = 0; r < ROWS; r++) {
                 map[r] = [];
@@ -99,10 +154,26 @@
                 }
             }
             
-            // Esconder la pista en un bloque al azar
+            // --- Place Clues ---
+            // Shuffle destructible blocks for random placement
+            for (let i = destructibleBlocks.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [destructibleBlocks[i], destructibleBlocks[j]] = [destructibleBlocks[j], destructibleBlocks[i]];
+            }
+
+            // Place the real clue
             if (destructibleBlocks.length > 0) {
-                let cluePos = destructibleBlocks[Math.floor(Math.random() * destructibleBlocks.length)];
-                map[cluePos.r][cluePos.c] = MAP_KEY.CLUE_HIDDEN;
+                const pos = destructibleBlocks.pop();
+                map[pos.r][pos.c] = MAP_KEY.CLUE_HIDDEN;
+                clues.push({ r: pos.r, c: pos.c, type: 'real', color: '#ADD8E6', revealed: false }); // Light Blue
+            }
+
+            // Place fake clues
+            const fakeColors = ['#FFC0CB', '#FFB6C1', '#F08080', '#FA8072']; // Pinks/Reds
+            for (let i = 0; i < TOTAL_FAKE_CLUES && destructibleBlocks.length > 0; i++) {
+                const pos = destructibleBlocks.pop();
+                map[pos.r][pos.c] = MAP_KEY.CLUE_HIDDEN;
+                clues.push({ r: pos.r, c: pos.c, type: 'fake', color: fakeColors[i % fakeColors.length], revealed: false });
             }
         }
 
@@ -117,9 +188,40 @@
             }
         });
 
+        // --- Mobile Controls ---
+        function setupMobileControls() {
+            const keyMap = {
+                'btn-up': 'KeyW',
+                'btn-down': 'KeyS',
+                'btn-left': 'KeyA',
+                'btn-right': 'KeyD'
+            };
+
+            for (const btnId in keyMap) {
+                const btn = document.getElementById(btnId);
+                const key = keyMap[btnId];
+                btn.addEventListener('touchstart', (e) => { e.preventDefault(); keys[key] = true; }, { passive: false });
+                btn.addEventListener('touchend', (e) => { e.preventDefault(); keys[key] = false; }, { passive: false });
+                btn.addEventListener('mousedown', (e) => { e.preventDefault(); keys[key] = true; });
+                btn.addEventListener('mouseup', (e) => { e.preventDefault(); keys[key] = false; });
+                btn.addEventListener('mouseleave', (e) => { keys[key] = false; }); // Stop moving if finger slides off
+            }
+
+            const bombBtn = document.getElementById('bombButton');
+            bombBtn.addEventListener('touchstart', (e) => { e.preventDefault(); placeBomb(); }, { passive: false });
+            bombBtn.addEventListener('mousedown', (e) => { e.preventDefault(); placeBomb(); });
+        }
+
         // --- 5. LÓGICA DEL JUEGO (UPDATE) ---
         function update() {
             if (gameWon || gameOver) return;
+
+            // If a fake clue message is active, only update its timer and pause everything else.
+            if (fakeClueMessage.timer > 0) {
+                fakeClueMessage.timer--;
+                return;
+            }
+
             movePlayer();
             updateBombs();
             updateExplosions();
@@ -128,13 +230,24 @@
         }
 
         function checkCluePickup() {
-            if (!clueRevealed) return;
-
             const playerCol = Math.floor(player.x / TILE_SIZE);
             const playerRow = Math.floor(player.y / TILE_SIZE);
 
-            if (playerRow === clueRevealed.r && playerCol === clueRevealed.c) {
+            if (map[playerRow][playerCol] !== MAP_KEY.CLUE_REVEALED) return;
+
+            const pickedClueIndex = clues.findIndex(c => c.revealed && c.r === playerRow && c.c === playerCol);
+            if (pickedClueIndex === -1) return;
+
+            const pickedClue = clues[pickedClueIndex];
+
+            if (pickedClue.type === 'real') {
                 gameWon = true;
+            } else {
+                // It's a fake clue
+                fakeClueMessage.timer = 1000; //180  3 seconds
+                fakeClueMessage.color = pickedClue.color;
+                map[playerRow][playerCol] = MAP_KEY.EMPTY; // Remove from map
+                clues.splice(pickedClueIndex, 1); // Remove from clues array
             }
         }
 
@@ -230,22 +343,23 @@
                     const tile = map[r][c];
                     
                     // Añadir efecto de explosión
-                    explosions.push({ r, c, timer: 15 }); // Dura 15 frames
+                    explosions.push({ r, c, timer: 30 }); // Dura 30 frames
 
                     if (tile === MAP_KEY.SOLID) {
                         break; // La explosión se detiene en pared sólida
                     }
                     
-                    if (tile === MAP_KEY.DESTRUCTIBLE) {
-                        map[r][c] = MAP_KEY.EMPTY; // Destruye el bloque
-                        break; // La explosión se detiene al romper un bloque
-                    }
-                    
-                    if (tile === MAP_KEY.CLUE_HIDDEN) {
-                        map[r][c] = MAP_KEY.CLUE_REVEALED; // Reveal the object
-                        clueRevealed = { r, c };
-                        statusEl.textContent = "¡Encontraste algo! ¡Ve a recogerlo!";
-                        break; // Stop explosion spreading through it
+                    if (tile === MAP_KEY.DESTRUCTIBLE || tile === MAP_KEY.CLUE_HIDDEN) {
+                        // Check if a clue is hidden here
+                        const clue = clues.find(clue => clue.r === r && clue.c === c);
+                        if (clue) {
+                            clue.revealed = true;
+                            map[r][c] = MAP_KEY.CLUE_REVEALED; // Reveal the clue object
+                            statusEl.textContent = "¡Encontraste algo! ¡Ve a recogerlo!";
+                        } else {
+                            map[r][c] = MAP_KEY.EMPTY; // Just destroy the block
+                        }
+                        break; // The explosion stops after destroying a block or revealing a clue
                     }
                 }
             }
@@ -304,7 +418,8 @@
             
             bombs = [];
             explosions = [];
-            clueRevealed = null;
+            clues = []; // This will be repopulated by generateMap
+            fakeClueMessage = { timer: 0, color: null };
             gameWon = false;
             gameOver = false;
             
@@ -318,6 +433,8 @@
 
             if (gameWon) {
                 drawWinScreen();
+            } else if (fakeClueMessage.timer > 0) {
+                drawFakeClueScreen();
             } else {
                 drawMap();
                 drawBombs();
@@ -325,6 +442,19 @@
                 drawPlayer();
                 drawUI();
             }
+        }
+
+        function drawFakeClueScreen() {
+            // Draw a full-screen rectangle with the clue's color
+            ctx.fillStyle = fakeClueMessage.color;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw the text
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 40px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText("Pista falsa, siga jugando", canvas.width / 2, canvas.height / 2);
         }
 
         function drawWinScreen() {
@@ -367,11 +497,13 @@
                             ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
                             break;
                         case MAP_KEY.CLUE_REVEALED:
-                            // Draw a small, intriguing object
-                            ctx.fillStyle = '#FFE81C'; // Yellow
-                            ctx.beginPath();
-                            ctx.arc(x + TILE_SIZE / 2, y + TILE_SIZE / 2, TILE_SIZE / 4, 0, Math.PI * 2);
-                            ctx.fill();
+                            const clue = clues.find(clue => clue.r === r && clue.c === c);
+                            if (clue) {
+                                ctx.fillStyle = clue.color;
+                                ctx.beginPath();
+                                ctx.arc(x + TILE_SIZE / 2, y + TILE_SIZE / 2, TILE_SIZE / 4, 0, Math.PI * 2);
+                                ctx.fill();
+                            }
                             break;
                         case MAP_KEY.EMPTY:
                             // Ya está limpio por el fondo del canvas
@@ -426,6 +558,7 @@
 
         // Iniciar el juego
         generateMap();
+        setupMobileControls();
         gameLoop();
     </script>
 </body>
