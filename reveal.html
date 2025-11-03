@@ -50,6 +50,11 @@
             flex: 1;
         }
 
+        #canvasWrapper {
+            position: relative;
+            display: inline-block;
+        }
+
         #livesDisplay {
             position: absolute;
             top: -35px;
@@ -124,6 +129,7 @@
         @media (orientation: portrait) {
             #livesDisplay {
                 top: -30px;
+                left: 10px;
                 font-size: clamp(14px, 3.5vw, 20px);
             }
 
@@ -150,6 +156,7 @@
 
             #livesDisplay {
                 top: -25px;
+                left: 10px;
                 font-size: clamp(12px, 3vw, 18px);
             }
 
@@ -180,7 +187,8 @@
 
             #livesDisplay {
                 top: -25px;
-                left: 5px;
+                left: 10px;
+                font-size: clamp(12px, 3vw, 16px);
             }
 
             body > p {
@@ -194,13 +202,55 @@
                 margin: 2px 0;
             }
         }
+
+        #restartButton {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 100;
+            background-color: #ff4444;
+            color: white;
+            border: 3px solid white;
+            border-radius: 15px;
+            padding: clamp(15px, 4vw, 25px) clamp(30px, 8vw, 50px);
+            font-size: clamp(18px, 4vw, 28px);
+            font-weight: bold;
+            cursor: pointer;
+            display: none;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+            touch-action: manipulation;
+            user-select: none;
+        }
+
+        #restartButton:hover {
+            background-color: #ff6666;
+        }
+
+        #restartButton:active {
+            background-color: #cc0000;
+            transform: translate(-50%, -50%) scale(0.95);
+        }
+
+        #restartButton.show {
+            display: block;
+        }
+
+        @media (orientation: landscape) {
+            #restartButton {
+                padding: clamp(10px, 2vh, 15px) clamp(20px, 5vw, 35px);
+                font-size: clamp(16px, 3vw, 22px);
+            }
+        }
     </style>
 </head>
 <body>
     <h1>Baby Bomber</h1>
     <div id="gameContainer">
-        <div id="livesDisplay">Vidas: 3</div>
-        <canvas id="gameCanvas"></canvas>
+        <div id="canvasWrapper">
+            <div id="livesDisplay">Vidas: 3</div>
+            <canvas id="gameCanvas"></canvas>
+        </div>
         <div id="controls">
             <div id="btn-up" class="control-btn">▲</div>
             <div id="btn-left" class="control-btn">◀</div>
@@ -210,7 +260,8 @@
         <div id="bombButton"></div>
     </div>
     <h2 id="status">🎯 Objetivo: ¡Encuentra la pista escondida!</h2>
-    <p>Usa WASD o Flechas para moverte. Presiona [Espacio] para poner una bomba.</p>
+    <p>Usa WASD o Flechas para moverte.</p>
+    <button id="restartButton">🔄 Reiniciar Juego</button>
 
     <script>
         // --- 1. CONFIGURACIÓN DEL JUEGO ---
@@ -219,6 +270,7 @@
         const statusEl = document.getElementById('status');
         const livesDisplayEl = document.getElementById('livesDisplay');
         const gameContainer = document.getElementById('gameContainer');
+        const restartButton = document.getElementById('restartButton');
 
         const TILE_SIZE = 40; // Tamaño base de cada celda (píxeles)
         const ROWS = 13;      // 13 filas
@@ -235,24 +287,47 @@
             const vh = window.innerHeight;
             
             // Calcular márgenes necesarios
-            // En landscape, los controles son más pequeños
             const isLandscape = vw > vh;
-            const controlHeight = isLandscape ? 120 : 150;
-            const controlWidth = isLandscape ? 120 : 150;
-            const textHeight = isLandscape ? 60 : 120;
             
-            // Calcular espacio disponible
-            const availableWidth = vw - controlWidth - 20; // Margen para controles
-            const availableHeight = vh - textHeight - controlHeight - 20; // Margen para texto y controles
-            
-            // Calcular la escala basada en el espacio disponible
-            const scaleX = availableWidth / LOGICAL_WIDTH;
-            const scaleY = availableHeight / LOGICAL_HEIGHT;
-            const scale = Math.min(scaleX, scaleY, 1); // No escalar más grande que el tamaño original
-            
-            // Aplicar el tamaño visual al canvas
-            canvas.style.width = (LOGICAL_WIDTH * scale) + 'px';
-            canvas.style.height = (LOGICAL_HEIGHT * scale) + 'px';
+            if (isLandscape) {
+                // En landscape, usar más espacio disponible
+                // Los controles son más pequeños y el texto casi no existe
+                const controlHeight = 100; // Más pequeño
+                const controlWidth = 100; // Más pequeño
+                const textHeight = 40; // Muy pequeño
+                
+                // Calcular espacio disponible (más agresivo en landscape)
+                const availableWidth = vw - controlWidth - 10; // Margen mínimo
+                const availableHeight = vh - textHeight - controlHeight - 10; // Margen mínimo
+                
+                // Calcular la escala basada en el espacio disponible
+                const scaleX = availableWidth / LOGICAL_WIDTH;
+                const scaleY = availableHeight / LOGICAL_HEIGHT;
+                // En landscape, permitir escalar más grande si es necesario (hasta 1.2x)
+                const scale = Math.min(scaleX, scaleY, 1.2);
+                
+                // Aplicar el tamaño visual al canvas
+                canvas.style.width = (LOGICAL_WIDTH * scale) + 'px';
+                canvas.style.height = (LOGICAL_HEIGHT * scale) + 'px';
+            } else {
+                // Portrait: usar márgenes más conservadores
+                const controlHeight = 150;
+                const controlWidth = 150;
+                const textHeight = 120;
+                
+                // Calcular espacio disponible
+                const availableWidth = vw - controlWidth - 20;
+                const availableHeight = vh - textHeight - controlHeight - 20;
+                
+                // Calcular la escala basada en el espacio disponible
+                const scaleX = availableWidth / LOGICAL_WIDTH;
+                const scaleY = availableHeight / LOGICAL_HEIGHT;
+                const scale = Math.min(scaleX, scaleY, 1);
+                
+                // Aplicar el tamaño visual al canvas
+                canvas.style.width = (LOGICAL_WIDTH * scale) + 'px';
+                canvas.style.height = (LOGICAL_HEIGHT * scale) + 'px';
+            }
             
             // Mantener la resolución interna del canvas
             canvas.width = LOGICAL_WIDTH;
@@ -520,6 +595,7 @@
 
         // --- 4. CONTROLES ---
         let keys = {};
+        
         document.addEventListener('keydown', e => keys[e.code] = true);
         document.addEventListener('keyup', e => keys[e.code] = false);
 
@@ -554,19 +630,37 @@
         }
 
         // --- 5. LÓGICA DEL JUEGO (UPDATE) ---
+        // Sistema de delta time para normalizar velocidad en diferentes tasas de refresco
+        let lastTime = performance.now();
+        const TARGET_FPS = 60;
+        const FRAME_TIME = 1000 / TARGET_FPS; // Tiempo por frame a 60fps en ms
+        
         function update() {
             if (gameWon || gameOver) return;
 
+            // Calcular delta time
+            const currentTime = performance.now();
+            const deltaTime = currentTime - lastTime;
+            lastTime = currentTime;
+            
+            // Factor de normalización basado en 60fps
+            // Si el delta time es muy pequeño (alta tasa de refresco), el factor será > 1
+            // Si el delta time es muy grande (baja tasa de refresco), el factor será < 1
+            const deltaFactor = deltaTime / FRAME_TIME;
+            
+            // Limitar el factor para evitar saltos extremos
+            const normalizedDelta = Math.min(Math.max(deltaFactor, 0.1), 2.0);
+
             // If a fake clue message is active, only update its timer and pause everything else.
             if (fakeClueMessage.timer > 0) {
-                fakeClueMessage.timer--;
+                fakeClueMessage.timer -= normalizedDelta;
                 return;
             }
 
-            movePlayer();
-            updateBombs();
-            updateExplosions();
-            updatePlayer();
+            movePlayer(normalizedDelta);
+            updateBombs(normalizedDelta);
+            updateExplosions(normalizedDelta);
+            updatePlayer(normalizedDelta);
             checkCluePickup();
         }
 
@@ -592,9 +686,9 @@
             }
         }
 
-        function updatePlayer() {
+        function updatePlayer(delta) {
             if (player.invincible) {
-                player.invincibleTimer--;
+                player.invincibleTimer -= delta;
                 if (player.invincibleTimer <= 0) {
                     player.invincible = false;
                     player.color = '#FFDAB9'; // Restore original color
@@ -605,7 +699,7 @@
             }
         }
 
-        function movePlayer() {
+        function movePlayer(delta) {
             let dx = 0;
             let dy = 0;
 
@@ -613,6 +707,10 @@
             if (keys['KeyS'] || keys['ArrowDown']) dy = player.speed;
             if (keys['KeyA'] || keys['ArrowLeft']) dx = -player.speed;
             if (keys['KeyD'] || keys['ArrowRight']) dx = player.speed;
+
+            // Aplicar delta time a la velocidad
+            dx *= delta;
+            dy *= delta;
 
             // Detección de colisiones simple
             // Revisa la próxima posición X
@@ -661,9 +759,9 @@
             });
         }
 
-        function updateBombs() {
+        function updateBombs(delta) {
             for (let i = bombs.length - 1; i >= 0; i--) {
-                bombs[i].timer--;
+                bombs[i].timer -= delta;
                 if (bombs[i].timer <= 0) {
                     explode(bombs[i]);
                     bombs.splice(i, 1);
@@ -706,10 +804,10 @@
             }
         }
         
-        function updateExplosions() {
+        function updateExplosions(delta) {
             for (let i = explosions.length - 1; i >= 0; i--) {
                 const exp = explosions[i];
-                exp.timer--;
+                exp.timer -= delta;
 
                 // Comprobar colisión con el jugador
                 const playerCol = Math.floor(player.x / TILE_SIZE);
@@ -730,8 +828,9 @@
             player.lives--;
             if (player.lives <= 0) {
                 gameOver = true;
-                statusEl.textContent = "GAME OVER. Presiona ESPACIO para reiniciar.";
-                document.addEventListener('keydown', restartGameOnSpace, { once: true });
+                statusEl.textContent = "GAME OVER";
+                // Mostrar botón de reinicio
+                restartButton.classList.add('show');
             } else {
                 // Respawn y dar invencibilidad temporal
                 player.x = player.initialX;
@@ -741,16 +840,13 @@
             }
         }
 
-        function restartGameOnSpace(e) {
-            if (e.code === 'Space') {
-                restartGame();
-            } else {
-                // Si se presiona otra tecla, volver a escuchar
-                document.addEventListener('keydown', restartGameOnSpace, { once: true });
-            }
-        }
-
         function restartGame() {
+            // Ocultar botón de reinicio
+            restartButton.classList.remove('show');
+            
+            // Reinicializar delta time para evitar saltos
+            lastTime = performance.now();
+            
             player.lives = GAME_CONFIG.playerLives;
             player.x = player.initialX;
             player.y = player.initialY;
@@ -767,6 +863,13 @@
             statusEl.textContent = "🎯 Objetivo: ¡Encuentra la pista escondida!";
             generateMap();
         }
+
+        // Agregar event listener al botón de reinicio
+        restartButton.addEventListener('click', restartGame);
+        restartButton.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            restartGame();
+        }, { passive: false });
 
         // --- 6. RENDERIZADO (DRAW) ---
         function draw() {
@@ -959,6 +1062,7 @@
             await loadAssets();
             generateMap();
             setupMobileControls();
+            lastTime = performance.now(); // Inicializar lastTime antes de empezar el loop
             gameLoop();
         }
 
