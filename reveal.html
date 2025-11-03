@@ -21,6 +21,18 @@
             position: relative;
         }
 
+        #livesDisplay {
+            position: absolute;
+            top: -35px;
+            left: 10px;
+            color: white;
+            font-family: 'Arial', sans-serif;
+            font-size: 24px;
+            font-weight: bold;
+            z-index: 10;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+        }
+
         #controls {
             position: fixed;
             bottom: 20px;
@@ -39,6 +51,12 @@
             width: 100px;
             height: 100px;
             z-index: 20;
+            background-image: url('assets/BombaCorazon.png');
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            background-color: transparent;
+            border: none;
         }
 
         .control-btn {
@@ -74,6 +92,7 @@
 <body>
     <h1>Baby Bomber</h1>
     <div id="gameContainer">
+        <div id="livesDisplay">Vidas: 3</div>
         <canvas id="gameCanvas"></canvas>
         <div id="controls">
             <div id="btn-up" class="control-btn">▲</div>
@@ -81,7 +100,7 @@
             <div id="btn-down" class="control-btn">▼</div>
             <div id="btn-right" class="control-btn">▶</div>
         </div>
-        <div id="bombButton" class="control-btn">💣</div>
+        <div id="bombButton"></div>
     </div>
     <h2 id="status">🎯 Objetivo: ¡Encuentra la pista escondida!</h2>
     <p>Usa WASD o Flechas para moverte. Presiona [Espacio] para poner una bomba.</p>
@@ -91,6 +110,7 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const statusEl = document.getElementById('status');
+        const livesDisplayEl = document.getElementById('livesDisplay');
 
         const TILE_SIZE = 40; // Tamaño de cada celda (píxeles)
         const ROWS = 13;      // 13 filas
@@ -108,14 +128,179 @@
             CLUE_REVEALED: 4 // The object on the ground
         };
 
+        // --- CONFIGURACIONES DEL JUEGO (Ajusta estos valores aquí) ---
+        const GAME_CONFIG = {
+            // Jugador
+            playerSpeed: 4,                    // Velocidad de movimiento del jugador
+            playerLives: 3,                    // Número de vidas iniciales
+            playerSizeFactor: 0.8,             // Tamaño del jugador relativo a TILE_SIZE (0.6 = 60%)
+            playerSpriteScale: 1.5,            // Escala visual del sprite del jugador (1.5 = 50% más grande)
+            playerInvincibilityTime: 120,      // Tiempo de invencibilidad después de ser golpeado (frames)
+            
+            // Bombas
+            bombTimer: 90,                    // Tiempo antes de que explote la bomba (frames, ~3 segundos a 60fps)
+            bombRange: 2,                      // Rango de la explosión (número de tiles en cada dirección)
+            
+            // Explosiones
+            explosionTimer: 20,                // Duración de la animación de explosión (frames)
+            
+            // Pistas
+            totalFakeClues: 10,                // Número de pistas falsas en el mapa
+            fakeClueMessageTimer: 100,       // Tiempo que se muestra el mensaje de pista falsa (frames)
+            
+            // Generación del mapa
+            blockDestructibleProbability: 0.1  // Probabilidad de que una celda NO tenga bloque (0.1 = 90% tiene bloque)
+        };
+
         let map = [];
         let bombs = [];
         let explosions = [];
         let clues = []; // Holds all clue objects {r, c, type, color, revealed}
         let fakeClueMessage = { timer: 0, color: null };
-        const TOTAL_FAKE_CLUES = 4;
         let gameWon = false;
         let gameOver = false;
+
+        // --- RUTAS DE ASSETS (Configura tus imágenes aquí) ---
+        const ASSET_PATHS = {
+            blockDestructible: 'assets/Nube3.png',  // Bloque destructible (ladrillo)
+            blockSolid: 'assets/Mamadera.png',          // Bloque sólido (pared)
+            background: 'assets/Cielo.png',                          // Fondo del mapa (ej: 'assets/grass.png')
+            player: 'assets/Bebe.png',                               // Bebé/jugador (ej: 'assets/baby.png')
+            bomb: 'assets/BombaCorazon.png',                                // Bomba (ej: 'assets/bomb.png')
+            explosion: 'assets/Fuego.png',                          // Fuego/explosión (ej: 'assets/fire.png')
+            clue: 'assets/Panal.png'                                 // Pista (ej: 'assets/clue.png')
+        };
+
+        // --- Assets (Sprites) ---
+        const assets = {
+            blockDestructible: null,  // Imagen para bloques destructibles
+            blockSolid: null,         // Imagen para bloques sólidos (opcional)
+            background: null,         // Imagen para el fondo del mapa (opcional)
+            player: null,             // Imagen para el bebé/jugador (opcional)
+            bomb: null,               // Imagen para las bombas (opcional)
+            explosion: null,          // Imagen para las explosiones/fuego (opcional)
+            clue: null,               // Imagen para las pistas (opcional)
+            loaded: false
+        };
+
+        // Función para cargar imágenes
+        function loadAssets() {
+            return new Promise((resolve) => {
+                let loadedCount = 0;
+                let totalAssets = 0;
+
+                function checkLoaded() {
+                    loadedCount++;
+                    if (loadedCount >= totalAssets) {
+                        assets.loaded = true;
+                        resolve();
+                    }
+                }
+
+                // Cargar sprite de bloque destructible
+                if (ASSET_PATHS.blockDestructible) {
+                    totalAssets++;
+                    assets.blockDestructible = new Image();
+                    assets.blockDestructible.onload = checkLoaded;
+                    assets.blockDestructible.onerror = () => {
+                        console.warn('No se pudo cargar el asset de bloque destructible. Usando dibujo por defecto.');
+                        checkLoaded();
+                    };
+                    assets.blockDestructible.src = ASSET_PATHS.blockDestructible;
+                } else {
+                    assets.blockDestructible = null;
+                }
+
+                // Cargar sprite de bloque sólido (opcional)
+                if (ASSET_PATHS.blockSolid) {
+                    totalAssets++;
+                    assets.blockSolid = new Image();
+                    assets.blockSolid.onload = checkLoaded;
+                    assets.blockSolid.onerror = () => {
+                        console.warn('No se pudo cargar el asset de bloque sólido. Usando dibujo por defecto.');
+                        checkLoaded();
+                    };
+                    assets.blockSolid.src = ASSET_PATHS.blockSolid;
+                } else {
+                    assets.blockSolid = null;
+                }
+
+                // Cargar sprite de fondo (opcional)
+                if (ASSET_PATHS.background) {
+                    totalAssets++;
+                    assets.background = new Image();
+                    assets.background.onload = checkLoaded;
+                    assets.background.onerror = () => {
+                        console.warn('No se pudo cargar el asset de fondo. Usando color por defecto.');
+                        checkLoaded();
+                    };
+                    assets.background.src = ASSET_PATHS.background;
+                } else {
+                    assets.background = null;
+                }
+
+                // Cargar sprite del jugador/bebé (opcional)
+                if (ASSET_PATHS.player) {
+                    totalAssets++;
+                    assets.player = new Image();
+                    assets.player.onload = checkLoaded;
+                    assets.player.onerror = () => {
+                        console.warn('No se pudo cargar el asset del jugador. Usando dibujo por defecto.');
+                        checkLoaded();
+                    };
+                    assets.player.src = ASSET_PATHS.player;
+                } else {
+                    assets.player = null;
+                }
+
+                // Cargar sprite de bomba (opcional)
+                if (ASSET_PATHS.bomb) {
+                    totalAssets++;
+                    assets.bomb = new Image();
+                    assets.bomb.onload = checkLoaded;
+                    assets.bomb.onerror = () => {
+                        console.warn('No se pudo cargar el asset de bomba. Usando dibujo por defecto.');
+                        checkLoaded();
+                    };
+                    assets.bomb.src = ASSET_PATHS.bomb;
+                } else {
+                    assets.bomb = null;
+                }
+
+                // Cargar sprite de explosión/fuego (opcional)
+                if (ASSET_PATHS.explosion) {
+                    totalAssets++;
+                    assets.explosion = new Image();
+                    assets.explosion.onload = checkLoaded;
+                    assets.explosion.onerror = () => {
+                        console.warn('No se pudo cargar el asset de explosión. Usando dibujo por defecto.');
+                        checkLoaded();
+                    };
+                    assets.explosion.src = ASSET_PATHS.explosion;
+                } else {
+                    assets.explosion = null;
+                }
+
+                // Cargar sprite de pista (opcional)
+                if (ASSET_PATHS.clue) {
+                    totalAssets++;
+                    assets.clue = new Image();
+                    assets.clue.onload = checkLoaded;
+                    assets.clue.onerror = () => {
+                        console.warn('No se pudo cargar el asset de pista. Usando dibujo por defecto.');
+                        checkLoaded();
+                    };
+                    assets.clue.src = ASSET_PATHS.clue;
+                } else {
+                    assets.clue = null;
+                }
+
+                // Si no hay assets para cargar, resolver inmediatamente
+                if (totalAssets === 0) {
+                    resolve();
+                }
+            });
+        }
 
         // --- 2. EL JUGADOR (BEBÉ) ---
         let player = {
@@ -123,10 +308,10 @@
             y: TILE_SIZE * 1.5,
             initialX: TILE_SIZE * 1.5,
             initialY: TILE_SIZE * 1.5,
-            size: TILE_SIZE * 0.6,
-            speed: 2,
+            size: TILE_SIZE * GAME_CONFIG.playerSizeFactor,
+            speed: GAME_CONFIG.playerSpeed,
             color: '#FFDAB9',
-            lives: 3,
+            lives: GAME_CONFIG.playerLives,
             invincible: false,
             invincibleTimer: 0
         };
@@ -146,7 +331,7 @@
                              map[r][c] = MAP_KEY.EMPTY;
                         }
                         // Llenar el resto con bloques destruibles
-                        else if (Math.random() > 0.1) { // 90% de probabilidad de bloque
+                        else if (Math.random() > GAME_CONFIG.blockDestructibleProbability) {
                             map[r][c] = MAP_KEY.DESTRUCTIBLE;
                             destructibleBlocks.push({r, c});
                         } else {
@@ -171,8 +356,8 @@
             }
 
             // Place fake clues
-            const fakeColors = ['#FFC0CB', '#FFB6C1', '#F08080', '#FA8072']; // Pinks/Reds
-            for (let i = 0; i < TOTAL_FAKE_CLUES && destructibleBlocks.length > 0; i++) {
+            const fakeColors = ['#FFC0CB', '#FFB6C1', '#F08080', '#FA8072', '#72CAFA', '#08A8FF', '#056599']; // Pinks/Reds
+            for (let i = 0; i < GAME_CONFIG.totalFakeClues && destructibleBlocks.length > 0; i++) {
                 const pos = destructibleBlocks.pop();
                 map[pos.r][pos.c] = MAP_KEY.CLUE_HIDDEN;
                 clues.push({ r: pos.r, c: pos.c, type: 'fake', color: fakeColors[i % fakeColors.length], revealed: false });
@@ -246,7 +431,7 @@
                 gameWon = true;
             } else {
                 // It's a fake clue
-                fakeClueMessage.timer = 1000; //180  3 seconds
+                fakeClueMessage.timer = GAME_CONFIG.fakeClueMessageTimer;
                 fakeClueMessage.color = pickedClue.color;
                 map[playerRow][playerCol] = MAP_KEY.EMPTY; // Remove from map
                 clues.splice(pickedClueIndex, 1); // Remove from clues array
@@ -317,8 +502,8 @@
             bombs.push({
                 r: r,
                 c: c,
-                timer: 180, // 180 frames (aprox 3 segundos)
-                range: 2     // Rango de la explosión
+                timer: GAME_CONFIG.bombTimer,
+                range: GAME_CONFIG.bombRange
             });
         }
 
@@ -345,7 +530,7 @@
                     const tile = map[r][c];
                     
                     // Añadir efecto de explosión
-                    explosions.push({ r, c, timer: 30 }); // Dura 30 frames
+                    explosions.push({ r, c, timer: GAME_CONFIG.explosionTimer });
 
                     if (tile === MAP_KEY.SOLID) {
                         break; // La explosión se detiene en pared sólida
@@ -398,7 +583,7 @@
                 player.x = player.initialX;
                 player.y = player.initialY;
                 player.invincible = true;
-                player.invincibleTimer = 120; // 2 segundos de invencibilidad
+                player.invincibleTimer = GAME_CONFIG.playerInvincibilityTime;
             }
         }
 
@@ -412,7 +597,7 @@
         }
 
         function restartGame() {
-            player.lives = 3;
+            player.lives = GAME_CONFIG.playerLives;
             player.x = player.initialX;
             player.y = player.initialY;
             player.invincible = false;
@@ -475,14 +660,33 @@
         }
 
         function drawUI() {
-            ctx.fillStyle = 'white';
-            ctx.font = 'bold 24px Arial';
-            ctx.textAlign = 'left';
-            ctx.textBaseline = 'top';
-            ctx.fillText(`Vidas: ${player.lives}`, 10, 10);
+            // Actualizar el texto de vidas en el elemento HTML (por encima del canvas)
+            livesDisplayEl.textContent = `Vidas: ${player.lives}`;
+        }
+
+        function drawBackground() {
+            // Dibujar el fondo del mapa (imagen o color sólido)
+            if (assets.background && assets.background.complete && assets.background.naturalWidth > 0) {
+                // Si hay imagen de fondo, dibujarla para todo el mapa
+                for (let r = 0; r < ROWS; r++) {
+                    for (let c = 0; c < COLS; c++) {
+                        const x = c * TILE_SIZE;
+                        const y = r * TILE_SIZE;
+                        ctx.drawImage(assets.background, x, y, TILE_SIZE, TILE_SIZE);
+                    }
+                }
+            } else {
+                // Si no hay imagen, usar el color de fondo (verde oscuro tipo bomberman)
+                ctx.fillStyle = '#4a5d23';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
         }
 
         function drawMap() {
+            // Primero dibujar el fondo
+            drawBackground();
+
+            // Luego dibujar los elementos del mapa
             for (let r = 0; r < ROWS; r++) {
                 for (let c = 0; c < COLS; c++) {
                     const x = c * TILE_SIZE;
@@ -490,25 +694,40 @@
                     
                     switch(map[r][c]) {
                         case MAP_KEY.SOLID:
-                            ctx.fillStyle = '#555'; // Gris oscuro
-                            ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+                            // Usar imagen si está cargada, sino usar el rectángulo por defecto
+                            if (assets.blockSolid && assets.blockSolid.complete && assets.blockSolid.naturalWidth > 0) {
+                                ctx.drawImage(assets.blockSolid, x, y, TILE_SIZE, TILE_SIZE);
+                            } else {
+                                ctx.fillStyle = '#555'; // Gris oscuro
+                                ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+                            }
                             break;
                         case MAP_KEY.DESTRUCTIBLE:
                         case MAP_KEY.CLUE_HIDDEN: // Se ve igual que un bloque normal
-                            ctx.fillStyle = '#8B4513'; // Marrón (ladrillo)
-                            ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+                            // Usar imagen si está cargada, sino usar el rectángulo por defecto
+                            if (assets.blockDestructible && assets.blockDestructible.complete && assets.blockDestructible.naturalWidth > 0) {
+                                ctx.drawImage(assets.blockDestructible, x, y, TILE_SIZE, TILE_SIZE);
+                            } else {
+                                ctx.fillStyle = '#8B4513'; // Marrón (ladrillo)
+                                ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+                            }
                             break;
                         case MAP_KEY.CLUE_REVEALED:
                             const clue = clues.find(clue => clue.r === r && clue.c === c);
                             if (clue) {
-                                ctx.fillStyle = clue.color;
-                                ctx.beginPath();
-                                ctx.arc(x + TILE_SIZE / 2, y + TILE_SIZE / 2, TILE_SIZE / 4, 0, Math.PI * 2);
-                                ctx.fill();
+                                // Usar imagen si está cargada, sino usar el círculo por defecto
+                                if (assets.clue && assets.clue.complete && assets.clue.naturalWidth > 0) {
+                                    ctx.drawImage(assets.clue, x, y, TILE_SIZE, TILE_SIZE);
+                                } else {
+                                    ctx.fillStyle = clue.color;
+                                    ctx.beginPath();
+                                    ctx.arc(x + TILE_SIZE / 2, y + TILE_SIZE / 2, TILE_SIZE / 4, 0, Math.PI * 2);
+                                    ctx.fill();
+                                }
                             }
                             break;
                         case MAP_KEY.EMPTY:
-                            // Ya está limpio por el fondo del canvas
+                            // El fondo ya se dibujó en drawBackground()
                             break;
                     }
                 }
@@ -516,10 +735,17 @@
         }
         
         function drawPlayer() {
-            ctx.fillStyle = player.color;
-            ctx.beginPath();
-            ctx.arc(player.x, player.y, player.size / 2, 0, Math.PI * 2);
-            ctx.fill();
+            // Usar imagen si está cargada, sino usar el círculo por defecto
+            if (assets.player && assets.player.complete && assets.player.naturalWidth > 0) {
+                // Hacer el sprite más grande (multiplicador de escala visual)
+                const size = player.size * GAME_CONFIG.playerSpriteScale;
+                ctx.drawImage(assets.player, player.x - size / 2, player.y - size / 2, size, size);
+            } else {
+                ctx.fillStyle = player.color;
+                ctx.beginPath();
+                ctx.arc(player.x, player.y, player.size / 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
         }
 
         function drawBombs() {
@@ -527,16 +753,24 @@
                 const x = bomb.c * TILE_SIZE + TILE_SIZE / 2;
                 const y = bomb.r * TILE_SIZE + TILE_SIZE / 2;
                 
-                // Efecto de parpadeo
-                const scale = (bomb.timer % 10 < 5) ? 0.7 : 0.8;
-                
-                ctx.fillStyle = '#222'; // Bomba negra
-                ctx.beginPath();
-                ctx.arc(x, y, (TILE_SIZE / 2) * scale, 0, Math.PI * 2);
-                ctx.fill();
-                
-                ctx.fillStyle = 'white'; // Mecha
-                ctx.fillRect(x - 2, y - (TILE_SIZE / 2) * scale - 5, 4, 5);
+                // Usar imagen si está cargada, sino usar el dibujo por defecto
+                if (assets.bomb && assets.bomb.complete && assets.bomb.naturalWidth > 0) {
+                    // Efecto de parpadeo
+                    const scale = (bomb.timer % 10 < 5) ? 0.7 : 0.8;
+                    const size = TILE_SIZE * scale;
+                    ctx.drawImage(assets.bomb, x - size / 2, y - size / 2, size, size);
+                } else {
+                    // Efecto de parpadeo
+                    const scale = (bomb.timer % 10 < 5) ? 0.7 : 0.8;
+                    
+                    ctx.fillStyle = '#222'; // Bomba negra
+                    ctx.beginPath();
+                    ctx.arc(x, y, (TILE_SIZE / 2) * scale, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    ctx.fillStyle = 'white'; // Mecha
+                    ctx.fillRect(x - 2, y - (TILE_SIZE / 2) * scale - 5, 4, 5);
+                }
             }
         }
         
@@ -545,9 +779,17 @@
                 const x = exp.c * TILE_SIZE;
                 const y = exp.r * TILE_SIZE;
                 
-                // La opacidad disminuye con el tiempo
-                ctx.fillStyle = `rgba(255, 165, 0, ${exp.timer / 15})`; 
-                ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+                // Usar imagen si está cargada, sino usar el rectángulo por defecto
+                if (assets.explosion && assets.explosion.complete && assets.explosion.naturalWidth > 0) {
+                    // La opacidad disminuye con el tiempo
+                    ctx.globalAlpha = exp.timer / GAME_CONFIG.explosionTimer;
+                    ctx.drawImage(assets.explosion, x, y, TILE_SIZE, TILE_SIZE);
+                    ctx.globalAlpha = 1.0; // Restaurar opacidad
+                } else {
+                    // La opacidad disminuye con el tiempo
+                    ctx.fillStyle = `rgba(255, 165, 0, ${exp.timer / (GAME_CONFIG.explosionTimer / 2)})`; 
+                    ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+                }
             }
         }
 
@@ -559,9 +801,14 @@
         }
 
         // Iniciar el juego
-        generateMap();
-        setupMobileControls();
-        gameLoop();
+        async function initGame() {
+            await loadAssets();
+            generateMap();
+            setupMobileControls();
+            gameLoop();
+        }
+
+        initGame();
     </script>
 </body>
 </html>
