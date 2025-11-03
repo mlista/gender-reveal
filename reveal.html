@@ -2,8 +2,14 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Baby Bomber</title>
     <style>
+        * {
+            box-sizing: border-box;
+            touch-action: manipulation; /* Prevenir zoom en doble toque */
+        }
+
         body {
             background-color: #1a1a1a;
             color: #f0f0f0;
@@ -12,13 +18,36 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            height: 100vh;
+            min-height: 100vh;
             margin: 0;
-            position: relative; /* Needed for overlay */
+            padding: 10px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        h1 {
+            text-align: center;
+            color: #fff;
+            margin: 5px 0;
+            font-size: clamp(18px, 4vw, 28px);
+        }
+
+        #status {
+            text-align: center;
+            color: #fff;
+            margin: 5px 0;
+            font-size: clamp(12px, 3vw, 18px);
+            padding: 0 10px;
         }
 
         #gameContainer {
             position: relative;
+            width: 100%;
+            max-width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex: 1;
         }
 
         #livesDisplay {
@@ -27,7 +56,7 @@
             left: 10px;
             color: white;
             font-family: 'Arial', sans-serif;
-            font-size: 24px;
+            font-size: clamp(16px, 4vw, 24px);
             font-weight: bold;
             z-index: 10;
             text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
@@ -35,21 +64,22 @@
 
         #controls {
             position: fixed;
-            bottom: 20px;
-            left: 20px;
+            bottom: clamp(10px, 2vh, 20px);
+            left: clamp(10px, 2vw, 20px);
             z-index: 20;
             display: grid;
-            grid-template-columns: 70px 70px 70px;
-            grid-template-rows: 70px 70px;
-            gap: 15px;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(2, 1fr);
+            gap: clamp(8px, 2vw, 15px);
+            touch-action: none;
         }
 
         #bombButton {
             position: fixed;
-            bottom: 20px;
-            right: 20px;
-            width: 100px;
-            height: 100px;
+            bottom: clamp(10px, 2vh, 20px);
+            right: clamp(10px, 2vw, 20px);
+            width: clamp(60px, 15vw, 100px);
+            height: clamp(60px, 15vw, 100px);
             z-index: 20;
             background-image: url('assets/BombaCorazon.png');
             background-size: contain;
@@ -57,6 +87,7 @@
             background-position: center;
             background-color: transparent;
             border: none;
+            touch-action: none;
         }
 
         .control-btn {
@@ -64,13 +95,14 @@
             border: 3px solid rgba(255, 255, 255, 0.5);
             border-radius: 50%;
             color: white;
-            font-size: 36px;
+            font-size: clamp(20px, 5vw, 36px);
             display: flex;
             justify-content: center;
             align-items: center;
-            user-select: none; /* Prevent text selection */
-            width: 70px;
-            height: 70px;
+            user-select: none;
+            width: clamp(50px, 12vw, 70px);
+            height: clamp(50px, 12vw, 70px);
+            touch-action: none;
         }
 
         #btn-up { grid-column: 2; grid-row: 1; }
@@ -79,13 +111,88 @@
         #btn-right { grid-column: 3; grid-row: 2; }
 
         canvas {
-            background-color: #4a5d23; /* Verde oscuro tipo bomberman */
-            border: 4px solid #333;
+            background-color: #4a5d23;
+            border: clamp(2px, 0.5vw, 4px) solid #333;
             box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            max-width: 100%;
+            max-height: 100%;
+            width: auto;
+            height: auto;
         }
-        h1, #status {
-            text-align: center;
-            color: #fff;
+
+        /* Media queries para diferentes orientaciones */
+        @media (orientation: portrait) {
+            #livesDisplay {
+                top: -30px;
+                font-size: clamp(14px, 3.5vw, 20px);
+            }
+
+            #controls {
+                bottom: clamp(8px, 1.5vh, 15px);
+                left: clamp(8px, 1.5vw, 15px);
+            }
+
+            #bombButton {
+                bottom: clamp(8px, 1.5vh, 15px);
+                right: clamp(8px, 1.5vw, 15px);
+            }
+        }
+
+        @media (orientation: landscape) and (max-height: 500px) {
+            h1 {
+                display: none;
+            }
+
+            #status {
+                font-size: clamp(10px, 2vw, 14px);
+                margin: 2px 0;
+            }
+
+            #livesDisplay {
+                top: -25px;
+                font-size: clamp(12px, 3vw, 18px);
+            }
+
+            #controls {
+                bottom: clamp(5px, 1vh, 10px);
+                left: clamp(5px, 1vw, 10px);
+                gap: clamp(5px, 1vw, 10px);
+            }
+
+            #bombButton {
+                bottom: clamp(5px, 1vh, 10px);
+                right: clamp(5px, 1vw, 10px);
+                width: clamp(50px, 12vw, 80px);
+                height: clamp(50px, 12vw, 80px);
+            }
+
+            .control-btn {
+                width: clamp(40px, 10vw, 60px);
+                height: clamp(40px, 10vw, 60px);
+                font-size: clamp(18px, 4vw, 28px);
+            }
+        }
+
+        @media (max-width: 480px) {
+            body {
+                padding: 5px;
+            }
+
+            #livesDisplay {
+                top: -25px;
+                left: 5px;
+            }
+
+            body > p {
+                display: none; /* Ocultar instrucciones en móviles pequeños */
+            }
+        }
+
+        @media (max-width: 768px) {
+            body > p {
+                font-size: clamp(10px, 2vw, 12px);
+                margin: 2px 0;
+            }
         }
     </style>
 </head>
@@ -111,13 +218,60 @@
         const ctx = canvas.getContext('2d');
         const statusEl = document.getElementById('status');
         const livesDisplayEl = document.getElementById('livesDisplay');
+        const gameContainer = document.getElementById('gameContainer');
 
-        const TILE_SIZE = 40; // Tamaño de cada celda (píxeles)
+        const TILE_SIZE = 40; // Tamaño base de cada celda (píxeles)
         const ROWS = 13;      // 13 filas
         const COLS = 17;      // 17 columnas
 
-        canvas.width = COLS * TILE_SIZE;
-        canvas.height = ROWS * TILE_SIZE;
+        // Tamaños internos del canvas (resolución lógica)
+        const LOGICAL_WIDTH = COLS * TILE_SIZE;
+        const LOGICAL_HEIGHT = ROWS * TILE_SIZE;
+
+        // Función para calcular y ajustar el tamaño del canvas
+        function resizeCanvas() {
+            // Obtener el espacio disponible
+            const vw = window.innerWidth;
+            const vh = window.innerHeight;
+            
+            // Calcular márgenes necesarios
+            // En landscape, los controles son más pequeños
+            const isLandscape = vw > vh;
+            const controlHeight = isLandscape ? 120 : 150;
+            const controlWidth = isLandscape ? 120 : 150;
+            const textHeight = isLandscape ? 60 : 120;
+            
+            // Calcular espacio disponible
+            const availableWidth = vw - controlWidth - 20; // Margen para controles
+            const availableHeight = vh - textHeight - controlHeight - 20; // Margen para texto y controles
+            
+            // Calcular la escala basada en el espacio disponible
+            const scaleX = availableWidth / LOGICAL_WIDTH;
+            const scaleY = availableHeight / LOGICAL_HEIGHT;
+            const scale = Math.min(scaleX, scaleY, 1); // No escalar más grande que el tamaño original
+            
+            // Aplicar el tamaño visual al canvas
+            canvas.style.width = (LOGICAL_WIDTH * scale) + 'px';
+            canvas.style.height = (LOGICAL_HEIGHT * scale) + 'px';
+            
+            // Mantener la resolución interna del canvas
+            canvas.width = LOGICAL_WIDTH;
+            canvas.height = LOGICAL_HEIGHT;
+            
+            // Ajustar el contexto para escalar correctamente
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+        }
+
+        // Inicializar tamaño del canvas
+        resizeCanvas();
+        
+        // Recalcular cuando cambia el tamaño de la ventana o la orientación
+        // El gameLoop ya redibuja continuamente, así que no necesitamos redibujar manualmente
+        window.addEventListener('resize', resizeCanvas);
+        
+        window.addEventListener('orientationchange', () => {
+            setTimeout(resizeCanvas, 100); // Pequeño delay para que el navegador actualice las dimensiones
+        });
 
         // Definición del mapa
         const MAP_KEY = {
