@@ -10,6 +10,7 @@ const bombButtonEl = document.getElementById('bombButton');
 const infoHeaderEl = document.getElementById('info-header');
 const bottomPanelEl = document.getElementById('bottom-panel');
 const toastContainerEl = document.getElementById('toast-container');
+const controlToggleContainerEl = document.getElementById('control-toggle-container');
 
 const TILE_SIZE = 40;
 let ROWS = 13;
@@ -50,6 +51,9 @@ function handleLayout() {
         if (!infoHeaderEl.contains(livesDisplayEl)) {
             infoHeaderEl.appendChild(livesDisplayEl);
         }
+        if (controlToggleContainerEl && !infoHeaderEl.contains(controlToggleContainerEl)) {
+            infoHeaderEl.appendChild(controlToggleContainerEl);
+        }
         if (!bottomPanelEl.contains(controlsEl)) {
             bottomPanelEl.appendChild(controlsEl);
             bottomPanelEl.appendChild(bombButtonEl);
@@ -58,6 +62,9 @@ function handleLayout() {
         const leftPanel = document.getElementById('left-panel');
         if (!leftPanel.contains(livesDisplayEl)) {
             leftPanel.insertBefore(livesDisplayEl, controlsEl);
+        }
+        if (controlToggleContainerEl && !leftPanel.contains(controlToggleContainerEl)) {
+            leftPanel.insertBefore(controlToggleContainerEl, controlsEl);
         }
     }
     resizeGame();
@@ -189,20 +196,170 @@ function generateMap() {
 
 // --- 6. CONTROLES ---
 let keys = {};
+let joystickDirection = { x: 0, y: 0 };
+let joystickActive = false;
+let useButtons = false; // false = joystick, true = botones
+
+function getJoystickCenter() {
+    const joystickContainer = document.getElementById('joystick-container');
+    if (!joystickContainer) return { x: 0, y: 0, maxDistance: 0 };
+    
+    const containerRect = joystickContainer.getBoundingClientRect();
+    return {
+        x: containerRect.left + containerRect.width / 2,
+        y: containerRect.top + containerRect.height / 2,
+        maxDistance: containerRect.width / 2 - 30
+    };
+}
+
+function switchControls(useButtonsMode) {
+    useButtons = useButtonsMode;
+    const joystickContainer = document.getElementById('joystick-container');
+    const buttonControls = document.getElementById('button-controls');
+    
+    if (useButtonsMode) {
+        joystickContainer.classList.remove('control-active');
+        joystickContainer.classList.add('control-hidden');
+        buttonControls.classList.remove('control-hidden');
+        buttonControls.classList.add('control-active');
+        // Resetear joystick cuando se desactiva
+        joystickActive = false;
+        joystickDirection.x = 0;
+        joystickDirection.y = 0;
+        const joystickStick = document.getElementById('joystick-stick');
+        if (joystickStick) joystickStick.style.transform = 'translate(0, 0)';
+    } else {
+        joystickContainer.classList.remove('control-hidden');
+        joystickContainer.classList.add('control-active');
+        buttonControls.classList.remove('control-active');
+        buttonControls.classList.add('control-hidden');
+    }
+    
+    // Guardar preferencia
+    localStorage.setItem('babyBomberControlType', useButtonsMode ? 'buttons' : 'joystick');
+}
+
 function setupControls() {
+    // Cargar preferencia guardada
+    const savedControlType = localStorage.getItem('babyBomberControlType');
+    const controlToggle = document.getElementById('control-toggle');
+    if (controlToggle) {
+        if (savedControlType === 'buttons') {
+            controlToggle.checked = true;
+            switchControls(true);
+        } else {
+            controlToggle.checked = false;
+            switchControls(false);
+        }
+        
+        // Listener para el toggle
+        controlToggle.addEventListener('change', (e) => {
+            switchControls(e.target.checked);
+        });
+    }
+    
+    // Controles de teclado
     document.addEventListener('keydown', e => {
         keys[e.code] = true;
         if (e.code === 'Space' && !gameWon && !gameOver) placeBomb();
     });
     document.addEventListener('keyup', e => { keys[e.code] = false; });
 
+    // Joystick virtual
+    const joystickContainer = document.getElementById('joystick-container');
+    const joystickStick = document.getElementById('joystick-stick');
+    
+    if (joystickContainer && joystickStick) {
+        function getJoystickPosition(e) {
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            return { x: clientX, y: clientY };
+        }
+        
+        function updateJoystick(x, y) {
+            const center = getJoystickCenter();
+            const dx = x - center.x;
+            const dy = y - center.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance > center.maxDistance) {
+                const angle = Math.atan2(dy, dx);
+                const stickX = Math.cos(angle) * center.maxDistance;
+                const stickY = Math.sin(angle) * center.maxDistance;
+                joystickStick.style.transform = `translate(${stickX}px, ${stickY}px)`;
+                
+                // Normalizar dirección
+                joystickDirection.x = Math.cos(angle);
+                joystickDirection.y = Math.sin(angle);
+            } else {
+                joystickStick.style.transform = `translate(${dx}px, ${dy}px)`;
+                
+                // Normalizar dirección basada en distancia
+                if (distance > 5) { // Dead zone
+                    joystickDirection.x = dx / center.maxDistance;
+                    joystickDirection.y = dy / center.maxDistance;
+                } else {
+                    joystickDirection.x = 0;
+                    joystickDirection.y = 0;
+                }
+            }
+        }
+        
+        function startJoystick(e) {
+            if (useButtons) return;
+            e.preventDefault();
+            joystickActive = true;
+            const pos = getJoystickPosition(e);
+            updateJoystick(pos.x, pos.y);
+        }
+        
+        function moveJoystick(e) {
+            if (!joystickActive || useButtons) return;
+            e.preventDefault();
+            const pos = getJoystickPosition(e);
+            updateJoystick(pos.x, pos.y);
+        }
+        
+        function endJoystick(e) {
+            if (useButtons) return;
+            e.preventDefault();
+            joystickActive = false;
+            joystickDirection.x = 0;
+            joystickDirection.y = 0;
+            joystickStick.style.transform = 'translate(0, 0)';
+        }
+        
+        // Event listeners para touch
+        joystickContainer.addEventListener('touchstart', startJoystick, { passive: false });
+        joystickContainer.addEventListener('touchmove', moveJoystick, { passive: false });
+        joystickContainer.addEventListener('touchend', endJoystick, { passive: false });
+        joystickContainer.addEventListener('touchcancel', endJoystick, { passive: false });
+        
+        // Event listeners para mouse
+        joystickContainer.addEventListener('mousedown', startJoystick);
+        document.addEventListener('mousemove', moveJoystick);
+        document.addEventListener('mouseup', endJoystick);
+    }
+    
+    // Botones digitales
     const keyMap = { 'btn-up': 'KeyW', 'btn-down': 'KeyS', 'btn-left': 'KeyA', 'btn-right': 'KeyD' };
     for (const btnId in keyMap) {
         const btn = document.getElementById(btnId);
+        if (!btn) continue;
         const key = keyMap[btnId];
-        ['touchstart', 'mousedown'].forEach(evt => btn.addEventListener(evt, e => { e.preventDefault(); keys[key] = true; }, { passive: false }));
-        ['touchend', 'mouseup', 'mouseleave'].forEach(evt => btn.addEventListener(evt, e => { e.preventDefault(); keys[key] = false; }, { passive: false }));
+        ['touchstart', 'mousedown'].forEach(evt => btn.addEventListener(evt, e => { 
+            if (!useButtons) return;
+            e.preventDefault(); 
+            keys[key] = true; 
+        }, { passive: false }));
+        ['touchend', 'mouseup', 'mouseleave'].forEach(evt => btn.addEventListener(evt, e => { 
+            if (!useButtons) return;
+            e.preventDefault(); 
+            keys[key] = false; 
+        }, { passive: false }));
     }
+    
+    // Botón de bomba
     ['touchstart', 'mousedown'].forEach(evt => bombButtonEl.addEventListener(evt, e => { e.preventDefault(); placeBomb(); }, { passive: false }));
     
     restartButton.addEventListener('click', restartGame);
@@ -231,10 +388,18 @@ function update() {
 
 function movePlayer(delta) {
     let dx = 0, dy = 0;
-    if (keys['KeyW'] || keys['ArrowUp']) dy = -player.speed;
-    if (keys['KeyS'] || keys['ArrowDown']) dy = player.speed;
-    if (keys['KeyA'] || keys['ArrowLeft']) dx = -player.speed;
-    if (keys['KeyD'] || keys['ArrowRight']) dx = player.speed;
+    
+    // Prioridad al joystick si está activo y no estamos usando botones
+    if (!useButtons && joystickActive && (Math.abs(joystickDirection.x) > 0.1 || Math.abs(joystickDirection.y) > 0.1)) {
+        dx = joystickDirection.x * player.speed;
+        dy = joystickDirection.y * player.speed;
+    } else {
+        // Controles de teclado (funciona con ambos sistemas)
+        if (keys['KeyW'] || keys['ArrowUp']) dy = -player.speed;
+        if (keys['KeyS'] || keys['ArrowDown']) dy = player.speed;
+        if (keys['KeyA'] || keys['ArrowLeft']) dx = -player.speed;
+        if (keys['KeyD'] || keys['ArrowRight']) dx = player.speed;
+    }
 
     if (dx !== 0 && !isSolid(player.x + (dx * delta), player.y)) player.x += dx * delta;
     if (dy !== 0 && !isSolid(player.x, player.y + (dy * delta))) player.y += dy * delta;

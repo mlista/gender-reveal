@@ -14,11 +14,25 @@
     <div id="gameContainer">
         <div id="left-panel" class="side-panel">
             <div id="livesDisplay">Vidas: 3</div>
+            <div id="control-toggle-container">
+                <label id="control-toggle-label">
+                    <span>Joystick</span>
+                    <input type="checkbox" id="control-toggle">
+                    <span class="toggle-slider"></span>
+                    <span>Botones</span>
+                </label>
+            </div>
             <div id="controls">
-                <div id="btn-up" class="control-btn">▲</div>
-                <div id="btn-left" class="control-btn">◀</div>
-                <div id="btn-down" class="control-btn">▼</div>
-                <div id="btn-right" class="control-btn">▶</div>
+                <div id="joystick-container" class="control-active">
+                    <div id="joystick-base"></div>
+                    <div id="joystick-stick"></div>
+                </div>
+                <div id="button-controls" class="control-hidden">
+                    <div id="btn-up" class="control-btn">▲</div>
+                    <div id="btn-left" class="control-btn">◀</div>
+                    <div id="btn-down" class="control-btn">▼</div>
+                    <div id="btn-right" class="control-btn">▶</div>
+                </div>
             </div>
         </div>
 
